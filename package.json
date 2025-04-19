@@ -1,0 +1,51 @@
+{
+  "name": "playwright-batch-runner",
+  "version": "1.0.0",
+  "description": "Batch-based Playwright test runner using Lerna Lite and component isolation",
+  "scripts": {
+    "ci": "pnpm install --frozen-lockfile",
+    "install:components": "pnpm install -r --filter './components/**'",
+    "ci:components": "NODE_OPTIONS='--max-old-space-size=8192' npx lerna exec --concurrency 1 --stream --loglevel verbose -- pnpm run ci",
+    "build:components": "npx lerna exec --stream --concurrency 1 -- pnpm run build",
+    "start:components": "node batchComponents.js",
+    "test": "node batchComponents.js",
+    "test:batch": "node batchLauncher.js",
+    "test:one": "npx playwright test -- recursive-action-handler.spec.js",
+    "test:debug": "playwright test --debug",
+    "test:one:debug": "npx playwright test --debug -- http-effect.spec.js",
+    "test:jenkins": "CI=true node batchComponents.js",
+    "test:jenkins:report": "CI=true node batchComponents.js || true && pnpm run report",
+    "report": "node report.js",
+    "result": "node resultSummary.js",
+    "setup": "node ./setup.js ${RELEASE_VERSION} ${NPM_ARTIFACT} ${version}",
+    "bumpDependency": "node ./bumpDependencies.js"
+  },
+  "keywords": [
+    "playwright",
+    "ci",
+    "testing",
+    "batch",
+    "automation",
+    "lerna-lite"
+  ],
+  "author": "Shant Ahuja",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shant-ahuja/playwright-batch-runner"
+  },
+  "bugs": {
+    "url": "https://github.com/shant-ahuja/playwright-batch-runner/issues"
+  },
+  "homepage": "https://github.com/shant-ahuja/playwright-batch-runner#readme",
+  "dependencies": {
+    "axios": "^1.7.9",
+    "form-data": "^4.0.0",
+    "xml2js": "^0.6.2"
+  },
+  "devDependencies": {
+    "@lerna-lite/core": "^3.10.1",
+    "@playwright/test": "^1.44.0",
+    "execa": "5.1.1"
+  }
+}

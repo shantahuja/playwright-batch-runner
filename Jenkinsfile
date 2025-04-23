@@ -36,32 +36,64 @@ pipeline {
     stage('Extract Version Info') {
       steps {
         script {
-          // --- For version extraction ---
           echo "🔍 Initial params.RELEASE_VERSION: '${params.RELEASE_VERSION}'"
+          echo "🔍 Initial params.MANUAL_SNAPSHOT: '${params.MANUAL_SNAPSHOT}'"
 
-          // Use params.RELEASE_VERSION only if it's set, not empty, and does NOT contain 'SNAPSHOT'
+          // --- Variable Declarations ---
           def fullVersion
+          def releaseVersion
+          def nextVersion
+          def buildType
+
+          // --- Handle MANUAL_SNAPSHOT override ---
+          if (params.MANUAL_SNAPSHOT?.trim()) {
+            def manualSnapshotVersion = params.MANUAL_SNAPSHOT.trim()
+            echo "📦 MANUAL_SNAPSHOT provided: ${manualSnapshotVersion}"
+
+            buildType = "RELEASE"
+            releaseVersion = manualSnapshotVersion
+            env.RELEASE_VERSION = manualSnapshotVersion
+            env.MANUAL_SNAPSHOT = manualSnapshotVersion
+
+            currentBuild.displayName = "#${env.BUILD_NUMBER} ${manualSnapshotVersion}"
+
+            properties([
+              parameters([
+                string(name: '=== RELEASE INFO ===', defaultValue: '', description: ' '),
+                string(name: 'BUILD_TYPE', defaultValue: buildType, description: 'Build type (SNAPSHOT/RELEASE)'),
+                string(name: 'RELEASE_VERSION', defaultValue: releaseVersion, description: 'Manual snapshot version entered'),
+                string(name: 'NEXT_VERSION', defaultValue: '', description: ' '),
+
+                string(name: '=== BATCH CONTROL ===', defaultValue: '', description: ' '),
+                string(name: 'IS_BATCH', defaultValue: '', description: 'To run a singular batch, enter "BATCH".'),
+                string(name: 'BATCH_NUMBER', defaultValue: '', description: 'If running a singular batch, enter the batch integer number.'),
+
+                string(name: '=== MANUAL SNAPSHOT CONTROL ===', defaultValue: '', description: ' '),
+                string(name: 'MANUAL_SNAPSHOT', defaultValue: '', description: 'Optional: Manually specify a snapshot version to override all auto-handling.')
+              ])
+            ])
+
+            return
+          }
+
+          // --- Normal Version Extraction Flow ---
           if (params.RELEASE_VERSION?.trim() && !params.RELEASE_VERSION.contains("SNAPSHOT")) {
             fullVersion = params.RELEASE_VERSION.trim()
             echo "✅ Using manually set RELEASE_VERSION: ${fullVersion}"
           } else {
-            // Otherwise, pull from Maven
             fullVersion = sh(script: "mvn help:evaluate -Dexpression=project.version -q -DforceStdout", returnStdout: true).trim()
             echo "🔍 Using Maven extracted version: ${fullVersion}"
           }
 
-          // Remove '-SNAPSHOT' for release version
-          def releaseVersion = fullVersion.replaceAll("-SNAPSHOT", "")
+          releaseVersion = fullVersion.replaceAll("-SNAPSHOT", "")
           echo "🔍 Release version (without -SNAPSHOT): ${releaseVersion}"
 
-          // Increment version for next snapshot
           def versionParts = releaseVersion.tokenize('.')
           versionParts[-1] = (versionParts[-1].toInteger() + 1).toString()
-          def nextVersion = versionParts.join('.') + "-SNAPSHOT"
+          nextVersion = versionParts.join('.') + "-SNAPSHOT"
           echo "📌 Next development version: ${nextVersion}"
 
-          // Determine BUILD_TYPE based on params.version
-          def buildType = "SNAPSHOT"
+          buildType = "SNAPSHOT"
           if (params.version?.trim() && !params.version.contains("SNAPSHOT")) {
             buildType = "RELEASE"
             releaseVersion = params.version
@@ -71,10 +103,8 @@ pipeline {
             echo "✅ Auto-detected build type: ${buildType}"
           }
 
-          // Update environment RELEASE_VERSION for later stages**
           env.RELEASE_VERSION = releaseVersion
 
-          // Set Jenkins build display name
           if (buildType == "SNAPSHOT") {
             releaseVersion += "-SNAPSHOT"
             currentBuild.displayName = "#${env.BUILD_NUMBER} ${nextVersion}"
@@ -82,10 +112,9 @@ pipeline {
             currentBuild.displayName = "#${env.BUILD_NUMBER} ${releaseVersion}"
           }
 
-          // **Update environment RELEASE_VERSION for setup.js
           env.RELEASE_VERSION = releaseVersion
 
-          // --- For Batch Running ---
+          // --- Batch Running Logic ---
           if (params.BATCH_NUMBER?.trim()) {
             if (!params.BATCH_NUMBER.isInteger() || params.BATCH_NUMBER.toInteger() <= 0) {
               error("❌ Invalid BATCH_NUMBER value: '${params.BATCH_NUMBER}'. Please enter a positive integer or leave it empty.")
@@ -101,7 +130,6 @@ pipeline {
               error("❌ Invalid IS_BATCH value: '${params.IS_BATCH}'. Please enter 'BATCH' or leave it empty.")
             }
 
-            // If IS_BATCH is 'BATCH', BATCH_NUMBER must be a valid positive integer
             if (!params.BATCH_NUMBER?.trim() || !params.BATCH_NUMBER.isInteger() || params.BATCH_NUMBER.toInteger() <= 0) {
               error("❌ IS_BATCH is 'BATCH' but BATCH_NUMBER is missing or invalid. Please enter a positive integer in BATCH_NUMBER.")
             }
@@ -111,7 +139,6 @@ pipeline {
             env.BATCH_NUMBER = params.BATCH_NUMBER
           }
 
-          // job parameters menu
           properties([
             parameters([
               string(name: '=== RELEASE INFO ===', defaultValue: '', description: ' '),
@@ -121,7 +148,10 @@ pipeline {
 
               string(name: '=== BATCH CONTROL ===', defaultValue: '', description: ' '),
               string(name: 'IS_BATCH', defaultValue: '', description: 'To run a singular batch, enter "BATCH".'),
-              string(name: 'BATCH_NUMBER', defaultValue: '', description: 'If running a singular batch, enter the batch integer number.')
+              string(name: 'BATCH_NUMBER', defaultValue: '', description: 'If running a singular batch, enter the batch integer number.'),
+
+              string(name: '=== MANUAL SNAPSHOT CONTROL ===', defaultValue: '', description: ' '),
+              string(name: 'MANUAL_SNAPSHOT', defaultValue: '', description: 'Optional: Manually specify a snapshot version to override all auto-handling.')
             ])
           ])
         }
@@ -345,6 +375,7 @@ pipeline {
                     --build-arg version=${params.version} \
                     --build-arg NPM_ARTIFACT=${env.npmArtifact} \
                     --build-arg RELEASE_VERSION=${env.RELEASE_VERSION} \
+                    --build-arg MANUAL_SNAPSHOT=${env.MANUAL_SNAPSHOT} \
                     --build-arg IS_BATCH=${env.IS_BATCH} \
                     --build-arg BATCH_NUMBER=${env.BATCH_NUMBER} \
                     --build-arg TEST_USERNAME=$TEST_USERNAME \
@@ -361,6 +392,26 @@ pipeline {
                     --build-arg BUILD_URL="${env.BUILD_URL}" \
                     -t ${dockerTag} .
                   """, returnStatus: true)
+
+                if (testResult == 86) {
+                  echo "⚠️ EMPTY_SNAPSHOT detected during Docker build."
+                  currentBuild.displayName = "#${env.BUILD_NUMBER} EMPTY_SNAPSHOT"
+                  currentBuild.description = """
+                  🚫 Snapshot not found in registry.
+                  📦 Version: ${env.RELEASE_VERSION}
+                  👤 Commit Author: ${env.COMMIT_AUTHOR}
+                  💬 Commit Message: ${env.COMMIT_MESSAGE}
+                  """.stripIndent().trim()
+                  error("❌ Stopping build because snapshot is missing in registry.")
+                } else if (testResult == 87) {
+                  echo "⚠️ BATCH_OUT_OF_BOUNDS detected during Docker build."
+                  currentBuild.displayName = "#${env.BUILD_NUMBER} BATCH_OUT_OF_BOUNDS"
+                  currentBuild.description = "User entered a batch number that does not exist. Check available batches."
+                  error("❌ Stopping build because batch number is invalid.")
+                } else if (testResult != 0) {
+                  echo "❌ Docker build failed for other reasons."
+                  error("❌ Docker build failed.")
+                }
 
                 // List all docker images to ensure the image exists
                 sh 'docker images'

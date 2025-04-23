@@ -299,7 +299,11 @@ async function runSingularBatch() {
   if (!batches[batchKey]) {
     console.error(`❌ Batch ${batchKey} not found in batch definitions.`);
     console.log(`📦 Available batches: ${Object.keys(batches).join(", ")}`);
-    process.exit(1);
+    fs.writeFileSync(
+      "/tmp/batch_out_of_bounds_detected",
+      "batch out of bounds detected"
+    );
+    process.exit(87);
   }
 
   const batch = batches[batchKey];

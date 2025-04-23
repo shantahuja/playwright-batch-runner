@@ -7,6 +7,8 @@ ARG RELEASE_VERSION
 ENV RELEASE_VERSION=${RELEASE_VERSION}
 ARG version
 ENV version=${version}
+ARG MANUAL_SNAPSHOT
+ENV MANUAL_SNAPSHOT=${MANUAL_SNAPSHOT}
 ARG IS_BATCH
 ENV IS_BATCH=${IS_BATCH}
 ARG BATCH_NUMBER
@@ -66,7 +68,9 @@ RUN npm i -g pnpm
 RUN pnpm run ci
 RUN npx playwright install-deps
 RUN npx playwright install --with-deps
-RUN pnpm run setup -- ${RELEASE_VERSION} ${NPM_ARTIFACT} ${version} --verbose
+RUN pnpm run setup -- ${RELEASE_VERSION} ${NPM_ARTIFACT} ${version} --verbose || true
+
+RUN if [ -f /tmp/empty_snapshot_detected ]; then exit 86; fi
 
 # Run tests with or without reporting based on IS_PR
 RUN if [ "$IS_PR" = "true" ]; then \
@@ -86,3 +90,5 @@ RUN if [ "$IS_PR" = "true" ]; then \
       if [ -f .version ]; then export $(cat .version); fi; \
       pnpm run test:jenkins:report --verbose || true; \
     fi
+
+RUN if [ -f /tmp/batch_out_of_bounds_detected ]; then exit 87; fi

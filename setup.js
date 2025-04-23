@@ -5,6 +5,7 @@ let releaseVersion = process.argv[2];
 let snapshotVersion = process.argv[3];
 let upstreamVersion = process.argv[4];
 let newVersionArgument = "";
+let manualSnapshotVersion = process.env.MANUAL_SNAPSHOT;
 
 // 🔍 Raw logs for debugging
 console.log("argv[0]: ", process.argv[0]);
@@ -42,6 +43,11 @@ releaseVersion = releaseVersion?.trim();
 snapshotVersion = snapshotVersion?.trim();
 newVersionArgument = newVersionArgument?.trim();
 
+// MANUAL_SNAPSHOT version override
+if (manualSnapshotVersion) {
+  newVersionArgument = manualSnapshotVersion;
+}
+
 // 🧠 Logic 3: Fallback to RELEASE_VERSION if nothing else
 if (
   !newVersionArgument &&
@@ -67,15 +73,23 @@ if (
   console.log("📦 Bumping components to:", newVersionArgument);
 
   // Replace this package name with your default validation target if needed
-  const { stdout } = execa.sync(
-    "npm",
-    ["view", "@example/package@" + newVersionArgument],
-    { stdio: ["ignore", "pipe", "inherit"] }
-  );
+  try {
+    const { stdout } = execa.sync(
+      "pnpm",
+      ["view", "@example/package@" + newVersionArgument],
+      optionsPipe
+    );
+  } catch {
+    console.log(
+      `${newVersionArgument} does not exist in the registry. Most likely this is an empty snapshot.\n`
+    );
+    console.log(
+      "If you suspect this version should exist, `pnpm or npm view @example/package@[version]` to see\n"
+    );
 
-  if (!stdout) {
-    console.error("❌ Version not found on npm:", newVersionArgument);
-    process.exit(1);
+    // Create the signal file
+    fs.writeFileSync("/tmp/empty_snapshot_detected", "empty snapshot detected");
+    process.exit(86);
   }
 
   execa.sync("pnpm", ["run", "bumpDependencies", newVersionArgument], {

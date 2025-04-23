@@ -37,7 +37,7 @@ class Reporter {
       ? decodeURIComponent(process.env.BUILD_URL)
       : "https://env-build-url-unresolved.com";
     const isBatch = process.env.IS_BATCH
-      ? `Batch ${process.env.BATCH_NUMBER} run`
+      ? `*Batch ${process.env.BATCH_NUMBER} run*`
       : "";
     const upstreamBranch = process.env.UPSTREAM_BRANCH || "N/A";
     const buildNumberUp = process.env.BUILD_NUMBER_UP || "Unknown";
@@ -130,7 +130,7 @@ class Reporter {
                 items: [
                   {
                     type: "TextBlock",
-                    text: `Seismic Master Test Report #${buildNumberDown} - ${status} *${isBatch}*`,
+                    text: `Seismic Master Test Report #${buildNumberDown} - ${status} ${isBatch}`,
                     weight: "Bolder",
                     size: "Medium",
                   },

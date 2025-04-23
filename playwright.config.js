@@ -10,7 +10,7 @@ module.exports = defineConfig({
     headless: false,
     screenshot: "only-on-failure",
     video: { mode: "retain-on-failure" },
-    trace: { mode: "retain-on-failure" },
+    trace: process.env.CI ? "on-first-retry" : "off",
     outputDir: "/srv/test-results",
   },
   testMatch: ["tests/**/*.spec.js"],

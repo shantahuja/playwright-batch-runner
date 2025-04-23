@@ -193,7 +193,7 @@ class Reporter {
                   },
                   {
                     type: "TextBlock",
-                    text: `Commit Author: @${commitAuthor}`,
+                    text: `Commit Author: <at>${commitAuthor}</at>`,
                     wrap: true,
                   },
                   {
@@ -278,6 +278,18 @@ class Reporter {
                 url: buildUrl,
               },
             ],
+            msteams: {
+              entities: [
+                {
+                  type: "mention",
+                  text: `<at>${commitAuthor}</at>`,
+                  mentioned: {
+                    id: commitEmail,
+                    name: commitAuthor,
+                  },
+                },
+              ],
+            },
           },
         },
       ],
